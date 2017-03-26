@@ -1,17 +1,17 @@
 /* istanbul ignore next */
 
-import Vue from 'vue';
 
-const isServer = Vue.prototype.$isServer;
 const SPECIAL_CHARS_REGEXP = /([\:\-\_]+(.))/g;
 const MOZ_HACK_REGEXP = /^moz([A-Z])/;
-const ieVersion = isServer ? 0 : Number(document.documentMode);
+
+const ieVersion =  Number(document.documentMode);
 
 /* istanbul ignore next */
 const trim = function(string) {
   return (string || '').replace(/^[\s\uFEFF]+|[\s\uFEFF]+$/g, '');
 };
 /* istanbul ignore next */
+
 const camelCase = function(name) {
   return name.replace(SPECIAL_CHARS_REGEXP, function(_, separator, letter, offset) {
     return offset ? letter.toUpperCase() : letter;
@@ -20,7 +20,7 @@ const camelCase = function(name) {
 
 /* istanbul ignore next */
 export const on = (function() {
-  if (!isServer && document.addEventListener) {
+  if (document.addEventListener) {
     return function(element, event, handler) {
       if (element && event && handler) {
         element.addEventListener(event, handler, false);
@@ -37,7 +37,7 @@ export const on = (function() {
 
 /* istanbul ignore next */
 export const off = (function() {
-  if (!isServer && document.removeEventListener) {
+  if (document.removeEventListener) {
     return function(element, event, handler) {
       if (element && event) {
         element.removeEventListener(event, handler, false);
@@ -122,7 +122,6 @@ export function removeClass(el, cls) {
 
 /* istanbul ignore next */
 export const getStyle = ieVersion < 9 ? function(element, styleName) {
-  if (isServer) return;
   if (!element || !styleName) return null;
   styleName = camelCase(styleName);
   if (styleName === 'float') {
@@ -143,7 +142,6 @@ export const getStyle = ieVersion < 9 ? function(element, styleName) {
     return element.style[styleName];
   }
 } : function(element, styleName) {
-  if (isServer) return;
   if (!element || !styleName) return null;
   styleName = camelCase(styleName);
   if (styleName === 'float') {
@@ -176,3 +174,276 @@ export function setStyle(element, styleName, value) {
     }
   }
 };
+
+// ===================================================================================================
+
+// Data() Copy from jQuery
+// ----------------------------------------
+var DataExpando = (new Date).getTime()
+
+function Data() {
+    this.expando = DataExpando + Data.uid++;
+}
+
+Data.uid = 1;
+
+const acceptData = function( owner ) {
+
+    // Accepts only:
+    //  - Node
+    //    - Node.ELEMENT_NODE
+    //    - Node.DOCUMENT_NODE
+    //  - Object
+    //    - Any
+    return owner.nodeType === 1 || owner.nodeType === 9 || !( +owner.nodeType );
+};
+
+Data.prototype = {
+
+    cache: function( owner ) {
+
+        // Check if the owner object already has a cache
+        var value = owner[ this.expando ];
+
+        // If not, create one
+        if ( !value ) {
+            value = {};
+
+            // We can accept data for non-element nodes in modern browsers,
+            // but we should not, see #8335.
+            // Always return an empty object.
+            if ( acceptData( owner ) ) {
+
+                // If it is a node unlikely to be stringify-ed or looped over
+                // use plain assignment
+                if ( owner.nodeType ) {
+                    owner[ this.expando ] = value;
+
+                // Otherwise secure it in a non-enumerable property
+                // configurable must be true to allow the property to be
+                // deleted when data is removed
+                } else {
+                    Object.defineProperty( owner, this.expando, {
+                        value: value,
+                        configurable: true
+                    } );
+                }
+            }
+        }
+
+        return value;
+    },
+    set: function( owner, data, value ) {
+        var prop,
+            cache = this.cache( owner );
+
+        // Handle: [ owner, key, value ] args
+        // Always use camelCase key (gh-2257)
+        if ( typeof data === "string" ) {
+            cache[ camelCase( data ) ] = value;
+
+        // Handle: [ owner, { properties } ] args
+        } else {
+
+            // Copy the properties one-by-one to the cache object
+            for ( prop in data ) {
+                cache[ camelCase( prop ) ] = data[ prop ];
+            }
+        }
+        return cache;
+    },
+    get: function( owner, key ) {
+        return key === undefined ?
+            this.cache( owner ) :
+
+            // Always use camelCase key (gh-2257)
+            owner[ this.expando ] && owner[ this.expando ][ camelCase( key ) ];
+    },
+    access: function( owner, key, value ) {
+
+        // In cases where either:
+        //
+        //   1. No key was specified
+        //   2. A string key was specified, but no value provided
+        //
+        // Take the "read" path and allow the get method to determine
+        // which value to return, respectively either:
+        //
+        //   1. The entire cache object
+        //   2. The data stored at the key
+        //
+        if ( key === undefined ||
+                ( ( key && typeof key === "string" ) && value === undefined ) ) {
+
+            return this.get( owner, key );
+        }
+
+        // When the key is not a string, or both a key and value
+        // are specified, set or extend (existing objects) with either:
+        //
+        //   1. An object of properties
+        //   2. A key and value
+        //
+        this.set( owner, key, value );
+
+        // Since the "set" path can have two possible entry points
+        // return the expected data based on which path was taken[*]
+        return value !== undefined ? value : key;
+    },
+    remove: function( owner, key ) {
+        var i,
+            cache = owner[ this.expando ];
+
+        if ( cache === undefined ) {
+            return;
+        }
+
+        if ( key !== undefined ) {
+
+            // Support array or space separated string of keys
+            if ( jQuery.isArray( key ) ) {
+
+                // If key is an array of keys...
+                // We always set camelCase keys, so remove that.
+                key = key.map( camelCase );
+            } else {
+                key = camelCase( key );
+
+                // If a key with the spaces exists, use it.
+                // Otherwise, create an array by matching non-whitespace
+                key = key in cache ?
+                    [ key ] :
+                    ( key.match( rnothtmlwhite ) || [] );
+            }
+
+            i = key.length;
+
+            while ( i-- ) {
+                delete cache[ key[ i ] ];
+            }
+        }
+
+        // Remove the expando if there's no more data
+        if ( key === undefined || jQuery.isEmptyObject( cache ) ) {
+
+            // Support: Chrome <=35 - 45
+            // Webkit & Blink performance suffers when deleting properties
+            // from DOM nodes, so set to undefined instead
+            // https://bugs.chromium.org/p/chromium/issues/detail?id=378607 (bug restricted)
+            if ( owner.nodeType ) {
+                owner[ this.expando ] = undefined;
+            } else {
+                delete owner[ this.expando ];
+            }
+        }
+    },
+    hasData: function( owner ) {
+        var cache = owner[ this.expando ];
+        return cache !== undefined ;
+    }
+};
+//-------------------------------------------------
+
+
+// map for cache element default display 
+var defaultDisplayMap = {}
+
+// data to save element style
+var dataPriv = new Data()
+
+// get element cumputed styles
+function getStyles( elem ) {
+
+    // Support: IE <=11 only, Firefox <=30 (#15098, #14150)
+    // IE throws on elements created in popups
+    // FF meanwhile throws on frame elements through "defaultView.getComputedStyle"
+    var view = elem.ownerDocument.defaultView;
+
+    if ( !view || !view.opener ) {
+      view = window;
+    }
+
+    return view.getComputedStyle( elem );
+};
+
+// get elems current style by name
+function css( elem, name ) {
+    let computed = getStyles( elem );
+    return computed?computed[name]:""
+}
+
+// get element default display style
+function getDefaultDisplay( elem ) {
+  var temp,
+    doc = elem.ownerDocument,
+    nodeName = elem.nodeName,
+    display = defaultDisplayMap[ nodeName ];
+
+  if ( display ) {
+    return display;
+  }
+
+  temp = doc.body.appendChild( doc.createElement( nodeName ) );
+  display = css( temp, "display" );
+
+  temp.parentNode.removeChild( temp );
+
+  if ( display === "none" ) {
+    display = "block";
+  }
+  defaultDisplayMap[ nodeName ] = display;
+
+  return display;
+}
+
+
+function elemShowOrHide(elem,show){
+
+    let display = elem.style.display;
+    let newDisplay = "none"
+    if ( show ) {
+        // Since we force visibility upon cascade-hidden elements, an immediate (and slow)
+        // check is required in this first loop unless we have a nonempty display value (either
+        // inline or about-to-be-restored)
+        if ( display === "none" ) {
+            newDisplay = dataPriv.get( elem, "display" ) || null;
+            if ( !newDisplay ) {
+                elem.style.display = "";
+            }
+        }
+        if ( elem.style.display === "") {
+            newDisplay = getDefaultDisplay( elem );
+        }
+    } else {
+        if ( display !== "none" ) {
+            newDisplay = "none";
+
+            // Remember what we're overwriting
+            dataPriv.set( elem, "display", display );
+        }
+    }
+
+    elem.style.display = newDisplay
+
+    console.log(elem,show,elem.style.display)
+
+    return elem;
+}
+
+
+export function show(elem){
+    elemShowOrHide(elem,true)
+}
+
+export function hide(elem){
+    elemShowOrHide(elem,false)
+}
+
+
+export function htmlEncode(html){
+    var temp = document.createElement ("div");
+    (temp.textContent != undefined ) ? (temp.textContent = html) : (temp.innerText = html);
+    var output = temp.innerHTML;
+    temp = null;
+    return output;
+}

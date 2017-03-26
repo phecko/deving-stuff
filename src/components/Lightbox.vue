@@ -6,7 +6,7 @@
 
 <script>
 
-import {addClass,setStyle} from './utils.js'
+import {on,off,once,addClass,setStyle,show,hide,htmlEncode} from './utils.js'
 
 const getUid = ()=>{
   return (""+(new Date()).getTime()+parseInt(Math.random()*1000)).toString(32)
@@ -26,7 +26,7 @@ const containerPadding = {
   bottom : 10,
   left : 10
 }
-
+const dataContainerHeight = 40
 const imageBorderWidth = {
   top : 4,
   right : 4,
@@ -36,9 +36,13 @@ const imageBorderWidth = {
 
 
 class Picture {
-  constructor(src){
+  constructor(src,caption,showIndex,indexTmpl,clickOverlayHide){
     this.src = src
     this.uid = getUid()
+    this.caption = caption
+    this.showIndex = showIndex
+    this.clickOverlayHide = clickOverlayHide
+    this.indexTmpl = indexTmpl
   }
 }
 
@@ -62,11 +66,9 @@ class Album {
   }
 
   getPicture(index){
-    console.log(index,this.pictures, this.pictures[index-1])
     if (this.pictures.length < index) {
       return
     }
-console.log("im ok")
     return this.pictures[index-1]
   }
 
@@ -83,6 +85,7 @@ const ModalManager = {
   _overlay : false,
   _outerContainer : false,
   _container : false,
+  _nav:false,
   _image:false,
   _loader:false,
 
@@ -106,7 +109,7 @@ const ModalManager = {
       return
     }
     let div = document.createElement("div")
-    div.innerHTML = '<div id="lightboxOverlay" class="lightboxOverlay"></div><div id="lightbox" class="lightbox"><div class="lb-outerContainer"><div class="lb-container"><img class="lb-image" src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" /><div class="lb-nav"><a class="lb-prev" href="" ></a><a class="lb-next" href="" ></a></div><div class="lb-loader"><a class="lb-cancel"></a></div></div></div><div class="lb-dataContainer"><div class="lb-data"><div class="lb-details"><span class="lb-caption"></span><span class="lb-number"></span></div><div class="lb-closeContainer"><a class="lb-close"></a></div></div></div></div>'
+    div.innerHTML = '<div id="lightboxOverlay" class="lightboxOverlay"></div><div id="lightbox" class="lightbox"><div class="lb-outerContainer"><div class="lb-container"><img class="lb-image" src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" /><div class="lb-nav"><a class="lb-prev" href="" ></a><a class="lb-next" href="" ></a></div><div class="lb-loader"><a class="lb-cancel"></a></div></div></div><div class="lb-dataContainer"><div class="lb-data"><div class="lb-details"><span class="lb-caption">这是一张很大大的图片</span><span class="lb-number">1 of 5 images</span></div><div class="lb-closeContainer"><a class="lb-close"></a></div></div></div></div>'
     let divs = div.childNodes
     let elements = []
     for (var i = 0; i < divs.length; i++) {
@@ -114,7 +117,7 @@ const ModalManager = {
     }
     let docFrag = document.createDocumentFragment();
     for(var i = 0; i < elements.length; i++) {
-      docFrag.appendChild(elements[i]); // Note that this does NOT go to the DOM
+      docFrag.appendChild(elements[i]); 
     }
       document.body.appendChild(docFrag)
 
@@ -127,20 +130,38 @@ const ModalManager = {
     this._loader = this._lightbox.querySelector(".lb-loader")
 
 
-    // 绑定事件
-    this._lightbox.querySelector(".lb-close").addEventListener("click",(event)=>{
+    // add event listener
+    on(window,"resize",()=>{
+        self.sizeOverlay()
+        self.sizeContainer(self._image.naturalWidth,self._image.naturalHeight)
+    })
+
+
+    on(this._nav,'mousedown', function(event) {
+      if (event.which === 3) {
+        setStyle(self._nav,'pointer-events', 'none')
+
+        once (self._lightbox,'contextmenu', function() {
+          setTimeout(function() {
+            setStyle(self._nav,'pointer-events', 'auto')
+          }, 0);
+        });
+      }
+    });
+
+    on(this._lightbox.querySelector(".lb-close"),"click",(event)=>{
       self.end()
       event.stopPropagation()
     })
 
-    this._nav.querySelector(".lb-prev").addEventListener("click",(event)=>{
+    on(this._nav.querySelector(".lb-prev"),"click",(event)=>{
       console.log("wahahah")
       self.changeImage(self.curIndex-1)
       event.preventDefault()
       event.stopPropagation()
     })
 
-    this._nav.querySelector(".lb-next").addEventListener("click",(event)=>{
+    on(this._nav.querySelector(".lb-next"),"click",(event)=>{
       console.log("wahahah")
       self.changeImage(self.curIndex+1)
       event.preventDefault()
@@ -153,64 +174,73 @@ const ModalManager = {
   start(albumName,uid){
     this.init()
     var self = this
-    let c = this._overlay
     this.sizeOverlay()
-    setStyle(c,"display","block")
-    setStyle(this._lightbox,"display","block")
+    show(this._overlay)
+    show(this._lightbox)
     this.showImage(albumName,uid)
   },
 
   end(){
-    setStyle(this._overlay,"display","none")
-    setStyle(this._lightbox,"display","none")
+    hide(ModalManager._overlay)
+    hide(ModalManager._lightbox)
   },
 
   showImage(albumName,uid){
 
-    console.log("showshow",uid)
     let pic = this.getPicture(uid)
     let self = this
-    let nav = this._container.querySelector(".lb-nav")
-    let navPrev = nav.querySelector(".lb-prev")
-    let navNext = nav.querySelector(".lb-next")
     if (!pic) {
       return 
     }
-    var $image = this._lightbox.getElementsByTagName("img")[0]
+    var $image = this._image
+
+    //add click hide event listener
+    if (pic.clickOverlayHide) {
+        on(self._overlay,"click",this.end)
+    }else{
+        off(self._overlay,"click",this.end)
+    }
 
 
     var preloader = new Image();
+    let navPrev = this._nav.querySelector(".lb-prev")
+    let navNext = this._nav.querySelector(".lb-next")
     setStyle(this._image,"visibility","hidden")
-    setStyle(this._loader,"display","block")
-    setStyle(this._nav,"display","none")
-    setStyle(navPrev,"display","none")
-    setStyle(navNext,"display","none")
+    show(this._loader)
+    hide(this._nav)
+    hide(navPrev)
+    hide(navNext)
     preloader.onload = ()=>{
-
-      setTimeout(function(){
 
         let imageWidth = preloader.width,
           imageHeight = preloader.height
-        let size = self.sizeContainer(imageWidth,imageHeight)
+        self.sizeContainer(imageWidth,imageHeight)
         setStyle(self._loader,"display","none")
-        setStyle($image,"width",size[0]+"px")
-        setStyle($image,"height",size[1]+"px")
+
         $image.src = preloader.src
         setStyle(self._image,"visibility","visible")
-
-      },1500)
-      
 
     }
 
     preloader.src = pic.src
 
+    self.updateNav(albumName,uid)
+    self.updateCaption(pic.caption)
+
+
+  },
+
+  updateNav(albumName,uid){
+    let pic = this.getPicture(uid)
+    let navPrev = this._nav.querySelector(".lb-prev")
+    let navNext = this._nav.querySelector(".lb-next")
     let album = this.getAlbum(albumName)
     if (!album) {
-      return
+        this._lightbox.querySelector(".lb-number").innerHTML = ""
+        return
     }
     this.curAlbum = album
-    setStyle(nav,"display","block")
+    show(this._nav)
 
     let index = album.getPictureIndex(uid)
     if (!index) {
@@ -218,16 +248,37 @@ const ModalManager = {
     }
     this.curIndex = index
 
-    if (index>1) {
-      setStyle(navPrev,"display","block")
+    // update index
+    let numberDom = this._lightbox.querySelector(".lb-number")
+    if (!pic.showIndex) {
+        numberDom.innerHTML = ""
+    }else{
+        let indexStr = pic.indexTmpl.replace(/\${d}/g,index).replace(/\${total}/g,album.length())
+        numberDom.innerHTML = indexStr
     }
 
-    if (index < album.length()) {
-      setStyle(navNext,"display","block")
-    }
 
+    // set timeout ,prevent double click next/prev button
+    setTimeout(()=>{
+        if (index>1) {
+            show(navPrev)
+        }else{
+            hide(navPrev)
+        }
 
+        if (index < album.length()) {
+            show(navNext)
+        }else{
+            hide(navNext)
+        }
+    },800)
   },
+
+  updateCaption(caption){
+    caption = htmlEncode(caption)
+    this._lightbox.querySelector(".lb-caption").innerHTML = caption
+  },
+
 
   changeImage(index){
     if (!this.curAlbum) {
@@ -249,11 +300,16 @@ const ModalManager = {
   },
 
   sizeOverlay(){
-    setStyle(this._overlay,"width",window.innerWidth+"px")
-    setStyle(this._overlay,"height",window.innerHeight+"px")
+    // setStyle(this._overlay,"width",window.offsetWidth+"px")
+    // setStyle(this._overlay,"height",window.scrollHeight+"px")
   },
 
   sizeContainer(imageWidth,imageHeight){
+
+    if (imageWidth==0 || imageHeight==0) {
+        return
+    }
+
     var self = this
     var oldWidth = this._outerContainer.outerWidth
     var oldHeight = this._outerContainer.outerHeight
@@ -263,8 +319,8 @@ const ModalManager = {
     let newHeight = containerPadding.top + imageBorderWidth.top + imageHeight + imageBorderWidth.bottom + containerPadding.bottom
 
 
-    let maxWidth = getWinWidth()-60,
-      maxHeight = getWinHeight()-60,
+    let maxWidth = getWinWidth()-80,
+      maxHeight = getWinHeight()-80- containerPadding.top - imageBorderWidth.top - imageBorderWidth.bottom - containerPadding.bottom - dataContainerHeight,
       ratio = imageWidth/imageHeight
 
       console.log(maxWidth,maxHeight,newWidth,newHeight)
@@ -286,9 +342,11 @@ const ModalManager = {
 
 
     let newImageWidth = newWidth - (containerPadding.left + imageBorderWidth.left  + imageBorderWidth.right + containerPadding.right)
-    let newImageHeight = newHeight - (containerPadding.top + imageBorderWidth.top  + imageBorderWidth.bottom + containerPadding.bottom)
-    console.log([newImageWidth,newImageHeight])
-    return [newImageWidth,newImageHeight]
+    let newImageHeight = newHeight - (containerPadding.top + imageBorderWidth.top  + imageBorderWidth.bottom + containerPadding.bottom )
+    
+    setStyle(this._image,"width",newImageWidth+"px")
+    setStyle(this._image,"height",newImageHeight+"px")
+
   },
 
   positionLightbox(width,height){
@@ -302,11 +360,9 @@ const ModalManager = {
     setStyle(this._lightbox,"left",left+"px")
   },
 
-  addToAlbum(name,src,desc=""){
+  addToAlbum(name,src,caption,showIndex,indexTmpl,clickOverlayHide){
 
-    console.log(this._albums)
-    let pic  = new Picture(src)
-
+    let pic  = new Picture(src,caption,showIndex,indexTmpl,clickOverlayHide)
     this._pictures[pic.uid] = pic
     if (!name) {
       return pic.uid
@@ -333,21 +389,43 @@ const ModalManager = {
 
 
 export default {
-  name: 'hello',
-  props:["src","desc","album"],
-  data () {
-    return {
-      uid:""
+    name: 'hello',
+    props:{
+        src:{
+            type:String
+        },
+        caption:{
+            type:String
+        },
+        album:{
+            type:String,
+            default: ""
+        },
+        showIndex:{
+            type:Boolean,
+            default:true
+        },
+        indexTmpl : {
+            type:String,
+            default:"${d} of ${total} images"
+        },
+        clickOverlayHide:{
+            type:Boolean,
+            default:true
+        }},
+    data () {
+      return {
+        uid:""
+      }
+    },
+    methods:{
+      open(){
+        ModalManager.start(this.album,this.uid)
+      }
+    },
+    mounted(){
+      this.uid = ModalManager.addToAlbum(this.album,this.src,this.caption,this.showIndex,this.indexTmpl,this.clickOverlayHide)
     }
-  },
-  methods:{
-    open(){
-      ModalManager.start(this.album,this.uid)
-    }
-  },
-  mounted(){
-    this.uid = ModalManager.addToAlbum(this.album,this.src)
-  }
 }
 </script>
 
@@ -364,9 +442,12 @@ body.lb-disable-scrolling {
 }
 
 .lightboxOverlay {
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
+  bottom:0;
+  right:0;
+  overflow: hidden;
   z-index: 9999;
   background-color: black;
   filter: progid:DXImageTransform.Microsoft.Alpha(Opacity=80);

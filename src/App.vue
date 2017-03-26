@@ -1,7 +1,6 @@
 <template>
   <div id="app">
-    <img src="./assets/logo.png">
-    <lightbox album="mm" src="http://img.mxmop.com/uploads/allimg/20150518/139-15041Z91A5-50.jpg">
+    <lightbox album="mm" src="http://img.mxmop.com/uploads/allimg/20150518/139-15041Z91A5-50.jpg" caption="wa hahahhahhah " indexTmpl="${d}/${total}">
       <img width="100px" src="http://img.mxmop.com/uploads/allimg/20150518/139-15041Z91A5-50.jpg">
     </lightbox>
     <lightbox album="mm" src="http://img.mxmop.com/uploads/allimg/20150518/139-15041Z91A6-51.jpg">
@@ -12,6 +11,7 @@
       <img width="100px" src="http://img.mxmop.com/uploads/allimg/20150518/139-15041Z91A7.jpg">
       
     </lightbox>
+    <br>
     <lightbox album="bb" src="http://img.mxmop.com/uploads/allimg/20150518/139-15041Z91A8.jpg">
       <img width="100px" src="http://img.mxmop.com/uploads/allimg/20150518/139-15041Z91A8.jpg">
       
@@ -21,8 +21,8 @@
       <img width="100px" src="http://img.mxmop.com/uploads/allimg/20150518/140-150213112218.jpg">
       
     </lightbox>
-
-    <lightbox album="cc" src="http://img.mxmop.com/uploads/allimg/20150518/140-150213112216.jpg">
+    <br>
+    <lightbox album="" src="http://img.mxmop.com/uploads/allimg/20150518/140-150213112216.jpg">
       <img width="100px" src="http://img.mxmop.com/uploads/allimg/20150518/140-150213112216.jpg">
       
     </lightbox>
@@ -32,12 +32,12 @@
 </template>
 
 <script>
-import Lightbox from './components/Lightbox'
+import Lightbox from './components/Lightbox.vue'
 
 export default {
   name: 'app',
   components: {
-    Lightbox
+    lightbox:Lightbox
   }
 }
 </script>
